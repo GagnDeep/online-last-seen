@@ -40,10 +40,12 @@ async function checkOnline(page, arr) {
     let onlineStatus = await page.$('html');
     let alreadyOnline = false
     let i = setInterval(async () => {
-        try {
-            let onlineText = await onlineStatus.$eval('span._315-i', node => node && node.textContent)
-            let online = onlineText && onlineText === 'online' ? true : false;
 
+        let onlineText = "offline";
+        let alreadyOnline = false
+        try {
+            onlineText = await onlineStatus.$eval('span._315-i', node => node && node.textContent);
+            let online = onlineText === 'online' ? true : false;
 
             if (online && !alreadyOnline) {
                 alreadyOnline = true;
@@ -51,17 +53,13 @@ async function checkOnline(page, arr) {
 
                 arr.push({ online: new Date() })
             }
-
-            if (!online && alreadyOnline) {
-                console.log("offline")
+        } catch (err) {
+            if (alreadyOnline) {
                 alreadyOnline = false
-
+                console.log("offline", arr)
                 arr[arr.length - 1].offline = new Date();
 
-                console.log(arr);
             }
-        } catch (err) {
-            console.log('catched')
         }
     }, 1000)
 
