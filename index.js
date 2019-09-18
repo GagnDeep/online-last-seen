@@ -42,7 +42,6 @@ async function checkOnline(page, arr) {
     let i = setInterval(async () => {
 
         let onlineText = "offline";
-        let alreadyOnline = false
         try {
             onlineText = await onlineStatus.$eval('span._315-i', node => node && node.textContent);
             let online = onlineText === 'online' ? true : false;
@@ -56,8 +55,8 @@ async function checkOnline(page, arr) {
         } catch (err) {
             if (alreadyOnline) {
                 alreadyOnline = false
-                console.log("offline", arr)
                 arr[arr.length - 1].offline = new Date();
+                console.log("offline", arr)
 
             }
         }
@@ -96,4 +95,4 @@ async function openPersonPage(mobile) {
     }
 }
 
-startStalking("6479018872")
+startStalking("8968044978")
