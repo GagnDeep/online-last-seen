@@ -1,18 +1,7 @@
 const puppeteer = require('puppeteer')
+const login = require('./whatsapp_login');
+const axios = require('axios');
 
-async function initialize(url) {
-
-    const browser = await puppeteer.launch({ headless: false });
-    const page = await browser.newPage();
-    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36")
-    await page.goto(url);
-
-    await introDelay(3000)
-    await page.screenshot({ path: 'example.png' });
-    // await page.waitForNavigation({ waitUntil: 'networkidle2' })
-    await introDelay(10000)
-    return page
-}
 
 async function introDelay(ms) {
     let promise = new Promise((res, rej) => setTimeout(() => res(), ms));
@@ -24,22 +13,34 @@ async function startStalking(mobile) {
 
     let arr = [];
 
-    page = await initialize("https://web.whatsapp.com");
+    let page = await login();
 
-    await introDelay(5000)
+    if (page) {
+        let isFound = await openPersonPage(mobile, page)
 
-    let isFound = await openPersonPage(mobile)
-
-    if (isFound) {
-        checkOnline(page, arr)
+        if (isFound) {
+            checkOnline(page, mobile)
+        }
     }
 }
 
-async function checkOnline(page, arr) {
+async function checkOnline(page, mobile) {
 
     let onlineStatus = await page.$('html');
-    let alreadyOnline = false
+    let alreadyOnline = false;
+
+    let obj = {}
+    let connectedState = true
+
     let i = setInterval(async () => {
+
+        let isConnected = await checkConnected(page);
+
+        if (isConnected !== connectedState) {
+            connectedState = isConnected;
+            console.log('connected: ' + connectedState);
+            await axios.post('https://online-57da3.firebaseio.com/connected.json', { isConnected: connectedState })
+        }
 
         let onlineText = "offline";
         try {
@@ -48,31 +49,61 @@ async function checkOnline(page, arr) {
 
             if (online && !alreadyOnline) {
                 alreadyOnline = true;
-                console.log("online")
-
-                arr.push({ online: new Date() })
+                obj = { online: new Date() }
             }
         } catch (err) {
             if (alreadyOnline) {
                 alreadyOnline = false
-                arr[arr.length - 1].offline = new Date();
-                console.log("offline", arr)
+                obj.offline = new Date();
 
+                try {
+                    console.log(obj)
+                    // await axios.post("https://online-57da3.firebaseio.com/online.json", obj);
+                    // clearInterval(i);
+                    // let message = `online ${(obj.offline - obj.online) / 60}`
+                    // sendNotification('7889135688', mobile, page, message)
+                }
+                catch (err) {
+                    console.log('error while posting object', err)
+                }
             }
         }
-    }, 1000)
+    }, 2500)
+}
 
+async function checkConnected(page) {
+    try {
+        let isConnected = await page.$('span[data-icon=alert-phone]');
+        return !isConnected;
+    } catch (err) {
+        console.log('error while checking connection', err);
+        return -1;
+    }
+}
+async function sendNotification(sendTo, stalkNumber, page, message) {
+    await openPersonPage(sendTo, page);
+    await sendMessage(message, page)
+    await openPersonPage(stalkNumber, page);
+    checkOnline(page, stalkNumber);
+}
+
+async function sendMessage(message, page) {
+    await page.keyboard.type(message)
+    await page.keyboard.press('Enter');
 }
 
 
-async function openPersonPage(mobile) {
+async function openPersonPage(mobile, page) {
     try {
         //clicking on search bar
-        await page.click('input._2zCfw')
+        await page.click('input[type=text]')
 
         // searhing for that mobile number
         await page.keyboard.type(mobile)
-        await introDelay(3000)
+        const isLoaded = await isSearched(page);
+
+        if (!isLoaded) return false;
+
         await page.keyboard.press('Enter')
 
         // check if person exists
@@ -90,9 +121,20 @@ async function openPersonPage(mobile) {
 
 
     } catch (err) {
-        console.log("Failed on clicking on search")
+        console.log("Failed on clicking on search", err)
         return false;
     }
+}
+
+async function isSearched(page, tries = 0) {
+    if (tries > 30) return false;
+
+    let isLoaded = page.$('span[data-icon=x-alt]')
+
+    if (isLoaded) return true;
+
+    await introDelay(500);
+    await isSearched(page, tries + 1)
 }
 
 startStalking("8968044978")
